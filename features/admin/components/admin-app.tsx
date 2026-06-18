@@ -4,6 +4,8 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Building2,
+  Calculator,
+  ChartColumn,
   ClipboardCheck,
   CreditCard,
   FileText,
@@ -17,8 +19,10 @@ import {
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { crmModules, defaultModule as defaultCrmModule } from "@/features/crm/config";
+import { analyticsModules } from "@/features/analytics/config";
 import { financeModules } from "@/features/finance/config";
 import { hrModules } from "@/features/hr/config";
+import { payrollModules } from "@/features/payroll/config";
 import { revenueModules } from "@/features/revenue/config";
 import type {
   ApiItemResponse,
@@ -44,9 +48,17 @@ const moduleGroups = [
     label: "Tài chính",
     modules: financeModules,
   },
+  {
+    label: "Bảng lương",
+    modules: payrollModules,
+  },
+  {
+    label: "KPI",
+    modules: analyticsModules,
+  },
 ];
 
-const allModules: ModuleConfig[] = [...crmModules, ...hrModules, ...revenueModules, ...financeModules];
+const allModules: ModuleConfig[] = [...crmModules, ...hrModules, ...revenueModules, ...financeModules, ...payrollModules, ...analyticsModules];
 
 const moduleIcons = {
   customers: Building2,
@@ -78,6 +90,16 @@ const moduleIcons = {
   "debt-closings": Lock,
   "partner-settlements": Network,
   "partner-settlement-payments": CreditCard,
+  "payroll-periods": Calculator,
+  "payroll-inputs": FileText,
+  "payroll-lines": Receipt,
+  "payroll-policy-versions": Calculator,
+  "tax-policy-versions": FileText,
+  "tax-policy-brackets": FileText,
+  "insurance-policy-versions": Badge,
+  "commission-policies": CreditCard,
+  "allowance-policies": Package,
+  "kpi-snapshots": ChartColumn,
 };
 
 const modulePaths: Record<string, string> = {
@@ -110,6 +132,16 @@ const modulePaths: Record<string, string> = {
   "debt-closings": "/finance/debt-closings",
   "partner-settlements": "/finance/partner-settlements",
   "partner-settlement-payments": "/finance/partner-settlement-payments",
+  "payroll-periods": "/payroll/payroll-periods",
+  "payroll-inputs": "/payroll/payroll-inputs",
+  "payroll-lines": "/payroll/payroll-lines",
+  "payroll-policy-versions": "/payroll/payroll-policy-versions",
+  "tax-policy-versions": "/payroll/tax-policy-versions",
+  "tax-policy-brackets": "/payroll/tax-policy-brackets",
+  "insurance-policy-versions": "/payroll/insurance-policy-versions",
+  "commission-policies": "/payroll/commission-policies",
+  "allowance-policies": "/payroll/allowance-policies",
+  "kpi-snapshots": "/kpi/kpi-snapshots",
 };
 
 type AdminAppProps = {
@@ -136,18 +168,21 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
 
   const fetchLookups = useCallback(async () => {
     try {
-      const [crmResponse, hrResponse, revenueResponse, financeResponse] = await Promise.all([
+      const [crmResponse, hrResponse, revenueResponse, financeResponse, payrollResponse] = await Promise.all([
         fetch("/api/crm/lookups"),
         fetch("/api/hr/lookups"),
         fetch("/api/revenue/lookups"),
         fetch("/api/finance/lookups"),
+        fetch("/api/payroll/lookups"),
       ]);
-      const [crmPayload, hrPayload, revenuePayload, financePayload] = (await Promise.all([
+      const [crmPayload, hrPayload, revenuePayload, financePayload, payrollPayload] = (await Promise.all([
         crmResponse.json(),
         hrResponse.json(),
         revenueResponse.json(),
         financeResponse.json(),
+        payrollResponse.json(),
       ])) as [
+        ApiItemResponse<LookupCollections>,
         ApiItemResponse<LookupCollections>,
         ApiItemResponse<LookupCollections>,
         ApiItemResponse<LookupCollections>,
@@ -167,12 +202,16 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
       if (!financeResponse.ok || !financePayload.success) {
         throw new Error(financePayload.error?.message ?? "Không tải được dữ liệu danh mục tài chính");
       }
+      if (!payrollResponse.ok || !payrollPayload.success) {
+        throw new Error(payrollPayload.error?.message ?? "Không tải được dữ liệu danh mục bảng lương");
+      }
 
       setLookups({
         ...crmPayload.data,
         ...hrPayload.data,
         ...revenuePayload.data,
         ...financePayload.data,
+        ...payrollPayload.data,
       });
       setLookupsError(null);
     } catch (error) {

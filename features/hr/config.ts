@@ -366,6 +366,12 @@ export const hrModules: HrModuleConfig[] = [
       { label: "Chờ duyệt", getValue: (records) => formatNumber(records.filter((item) => item.status === "pending").length) },
       { label: "Đã duyệt", getValue: (records) => formatNumber(records.filter((item) => item.status === "approved").length) },
     ],
+    rowActions: [
+      { key: "submit", label: "Gửi duyệt", icon: "send", endpoint: (record) => `/api/leave-requests/${record.id}/submit`, confirmLabel: "Gửi duyệt", hidden: (record) => record.status !== "draft" },
+      { key: "approve", label: "Duyệt", icon: "check", variant: "success", endpoint: (record) => `/api/leave-requests/${record.id}/approve`, confirmLabel: "Duyệt", hidden: (record) => !["draft", "pending"].includes(String(record.status)) },
+      { key: "reject", label: "Từ chối", icon: "ban", variant: "danger", endpoint: (record) => `/api/leave-requests/${record.id}/reject`, confirmLabel: "Từ chối", hidden: (record) => !["draft", "pending"].includes(String(record.status)) },
+      { key: "cancel", label: "Hủy", icon: "x", variant: "warning", endpoint: (record) => `/api/leave-requests/${record.id}/cancel`, confirmLabel: "Hủy", hidden: (record) => !["draft", "pending", "approved"].includes(String(record.status)) },
+    ],
   },
   {
     key: "leave-balances",
