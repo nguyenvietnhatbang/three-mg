@@ -94,3 +94,59 @@ export const contractInputSchema = z.object({
 
 export const contractPatchSchema = contractInputSchema.partial();
 
+export const legalEntityInputSchema = z.object({
+  code: z.string().trim().min(1, "Vui lòng nhập mã pháp nhân"),
+  name: z.string().trim().min(1, "Vui lòng nhập tên pháp nhân"),
+  taxCode: nullableText,
+  address: nullableText,
+  isActive: z.coerce.boolean().default(true),
+});
+
+export const legalEntityPatchSchema = legalEntityInputSchema.partial();
+
+export const partnerInputSchema = z.object({
+  code: z.string().trim().min(1, "Vui lòng nhập mã đối tác"),
+  name: z.string().trim().min(1, "Vui lòng nhập tên đối tác"),
+  taxCode: nullableText,
+  address: nullableText,
+  email: nullableText,
+  phone: nullableText,
+  isActive: z.coerce.boolean().default(true),
+});
+
+export const partnerPatchSchema = partnerInputSchema.partial();
+
+export const customerContactInputSchema = z.object({
+  customerId: z.string().uuid("Vui lòng chọn khách hàng"),
+  fullName: z.string().trim().min(1, "Vui lòng nhập tên liên hệ"),
+  title: nullableText,
+  email: nullableText,
+  phone: nullableText,
+  isPrimary: z.coerce.boolean().default(false),
+});
+
+export const customerContactPatchSchema = customerContactInputSchema.partial();
+
+export const customerAssignmentInputSchema = z.object({
+  customerId: z.string().uuid("Vui lòng chọn khách hàng"),
+  employeeId: z.string().uuid("Vui lòng chọn nhân sự"),
+  roleName: z.string().trim().min(1, "Vui lòng nhập vai trò").default("primary_owner"),
+  effectiveFrom: z.string().date("Vui lòng nhập ngày hiệu lực"),
+  effectiveTo: nullableDate,
+});
+
+export const customerAssignmentPatchSchema = customerAssignmentInputSchema.partial();
+
+export const contractServiceInputSchema = z.object({
+  contractId: z.string().uuid("Vui lòng chọn hợp đồng"),
+  serviceId: z.string().uuid("Vui lòng chọn dịch vụ"),
+  billingCycle: billingCycleSchema.default("monthly"),
+  quantity: z.coerce.number().positive("Số lượng phải lớn hơn 0").default(1),
+  unitPrice: moneySchema,
+  vatRate: z.coerce.number().min(0).default(0),
+  isPrimary: z.coerce.boolean().default(false),
+  effectiveFrom: z.string().date("Vui lòng nhập ngày hiệu lực"),
+  effectiveTo: nullableDate,
+});
+
+export const contractServicePatchSchema = contractServiceInputSchema.partial();

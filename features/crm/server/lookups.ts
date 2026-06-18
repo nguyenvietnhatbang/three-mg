@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 
 export async function getCrmLookups() {
-  const [customers, employees, legalEntities, partners, services] =
+  const [customers, employees, legalEntities, partners, services, contracts] =
     await Promise.all([
       db.query(`
         select id, customer_code as "code", company_name as "name"
@@ -38,6 +38,14 @@ export async function getCrmLookups() {
         order by name asc
         limit 500
       `),
+      db.query(`
+        select ct.id, ct.contract_code as "code", c.company_name as "name"
+        from contracts ct
+        join customers c on c.id = ct.customer_id
+        where ct.deleted_at is null
+        order by ct.contract_code asc
+        limit 500
+      `),
     ]);
 
   return {
@@ -46,6 +54,6 @@ export async function getCrmLookups() {
     legalEntities: legalEntities.rows,
     partners: partners.rows,
     services: services.rows,
+    contracts: contracts.rows,
   };
 }
-

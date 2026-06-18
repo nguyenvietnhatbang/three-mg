@@ -8,7 +8,15 @@ import type {
   Pagination,
 } from "@/features/shared/components/management/types";
 
-export type ModuleKey = "customers" | "services" | "contracts";
+export type ModuleKey =
+  | "customers"
+  | "services"
+  | "contracts"
+  | "contract-services"
+  | "customer-contacts"
+  | "customer-assignments"
+  | "legal-entities"
+  | "partners";
 
 export type CrmRecord = ManagementRecord;
 export type { ApiItemResponse, ApiListResponse, LookupOption, ModuleConfig, Pagination };
@@ -19,4 +27,5 @@ export type CrmLookups = LookupCollections & {
   legalEntities: LookupOption[];
   partners: LookupOption[];
   services: LookupOption[];
+  contracts: LookupOption[];
 };

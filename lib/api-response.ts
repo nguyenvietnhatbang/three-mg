@@ -45,7 +45,18 @@ export function serverError() {
   );
 }
 
+export class BadRequestError extends Error {
+  constructor(message: string, public details?: unknown) {
+    super(message);
+    this.name = "BadRequestError";
+  }
+}
+
 export function handleApiError(error: unknown) {
+  if (error instanceof BadRequestError) {
+    return badRequest(error.message, error.details);
+  }
+
   if (error instanceof ZodError) {
     return badRequest("Dữ liệu không hợp lệ", error.flatten());
   }
@@ -53,4 +64,3 @@ export function handleApiError(error: unknown) {
   console.error(error);
   return serverError();
 }
-
