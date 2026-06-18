@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, RefreshCw, RotateCcw, Search } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { AlertCircle, Plus, RefreshCw, RotateCcw, Search } from "lucide-react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type {
   ApiItemResponse,
   ApiListResponse,
@@ -29,6 +29,7 @@ export function ModuleScreen({
   onRefreshLookups,
 }: ModuleScreenProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [records, setRecords] = useState<ManagementRecord[]>([]);
   const [pagination, setPagination] = useState<PaginationType | null>(null);
@@ -39,6 +40,8 @@ export function ModuleScreen({
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState<ManagementRecord | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [searchDraft, setSearchDraft] = useState(searchParams.get("search") ?? "");
 
   const queryState = useMemo(
@@ -52,10 +55,16 @@ export function ModuleScreen({
     [config.defaultSortBy, searchParams],
   );
 
+  const activeFilterCount = useMemo(() => {
+    const filterCount = config.filters.filter((filter) => searchParams.get(filter.key)).length;
+
+    return filterCount + (queryState.search ? 1 : 0);
+  }, [config.filters, queryState.search, searchParams]);
+
   const setParams = useCallback(
     (updates: Record<string, string | number | null>) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set("module", config.key);
+      params.delete("module");
 
       Object.entries(updates).forEach(([key, value]) => {
         if (value === null || value === "") {
@@ -65,9 +74,10 @@ export function ModuleScreen({
         }
       });
 
-      router.replace(`/?${params.toString()}`, { scroll: false });
+      const queryString = params.toString();
+      router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
     },
-    [config.key, router, searchParams],
+    [pathname, router, searchParams],
   );
 
   const fetchRecords = useCallback(async () => {
@@ -129,7 +139,8 @@ export function ModuleScreen({
 
   async function submitRecord(value: ManagementRecord) {
     setSubmitting(true);
-    setError(null);
+    setFormError(null);
+    setFieldErrors({});
 
     const isEditing = Boolean(editingRecord?.id);
     const endpoint = isEditing ? `${config.apiPath}/${editingRecord?.id}` : config.apiPath;
@@ -143,7 +154,9 @@ export function ModuleScreen({
       const payload = (await response.json()) as ApiItemResponse<ManagementRecord>;
 
       if (!response.ok || !payload.success) {
-        throw new Error(payload.error?.message ?? "Không lưu được dữ liệu");
+        setFormError(payload.error?.message ?? "Không lưu được dữ liệu");
+        setFieldErrors(extractFieldErrors(payload.error?.details));
+        return;
       }
 
       setCreateOpen(false);
@@ -151,7 +164,7 @@ export function ModuleScreen({
       await fetchRecords();
       onRefreshLookups();
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Không lưu được dữ liệu");
+      setFormError(submitError instanceof Error ? submitError.message : "Không lưu được dữ liệu");
     } finally {
       setSubmitting(false);
     }
@@ -193,6 +206,18 @@ export function ModuleScreen({
     });
   }
 
+  function openCreateModal() {
+    setFormError(null);
+    setFieldErrors({});
+    setCreateOpen(true);
+  }
+
+  function openEditModal(record: ManagementRecord) {
+    setFormError(null);
+    setFieldErrors({});
+    setEditingRecord(record);
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-zinc-200 bg-white px-5 py-4">
@@ -205,14 +230,15 @@ export function ModuleScreen({
             <button
               type="button"
               onClick={() => void fetchRecords()}
+              disabled={loading}
               className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
-              <RefreshCw className="size-4" />
+              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
               Tải lại
             </button>
             <button
               type="button"
-              onClick={() => setCreateOpen(true)}
+              onClick={openCreateModal}
               className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800"
             >
               <Plus className="size-4" />
@@ -237,7 +263,7 @@ export function ModuleScreen({
         <div className="mt-4 rounded-lg border border-zinc-200 bg-white">
           <div className="space-y-3 p-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="relative max-w-xl flex-1">
+              <div className="relative max-w-2xl flex-1">
                 <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" />
                 <input
                   value={searchDraft}
@@ -265,9 +291,15 @@ export function ModuleScreen({
               >
                 <RotateCcw className="size-4" />
                 Xóa lọc
+                {activeFilterCount > 0 ? (
+                  <span className="rounded-full bg-zinc-900 px-1.5 text-xs text-white">
+                    {activeFilterCount}
+                  </span>
+                ) : null}
               </button>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {config.filters.length > 0 ? (
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               {config.filters.map((filter) => {
                 const options = filter.lookupKey
                   ? lookups?.[filter.lookupKey]?.map((option) => ({
@@ -298,12 +330,23 @@ export function ModuleScreen({
                   </label>
                 );
               })}
-            </div>
+              </div>
+            ) : null}
           </div>
 
           {error ? (
-            <div className="border-y border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-              {error}
+            <div className="flex flex-col gap-3 border-y border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <span>{error}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => void fetchRecords()}
+                className="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-medium text-red-700 hover:bg-red-50"
+              >
+                Thử lại
+              </button>
             </div>
           ) : null}
 
@@ -315,8 +358,10 @@ export function ModuleScreen({
             sortOrder={queryState.sortOrder}
             onSort={handleSort}
             onView={setSelectedRecord}
-            onEdit={setEditingRecord}
+            onEdit={openEditModal}
             onDelete={setDeletingRecord}
+            onCreate={openCreateModal}
+            emptyActionLabel={config.primaryAction}
           />
           <Pagination
             pagination={pagination}
@@ -333,16 +378,25 @@ export function ModuleScreen({
         onClose={() => setSelectedRecord(null)}
         size="xl"
       >
-        <div className="grid gap-4 md:grid-cols-2">
-          {config.detailFields.map((field) => (
-            <div key={field.key} className="rounded-md border border-zinc-200 p-3">
-              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
-                {field.label}
-              </p>
-              <div className="mt-2 text-sm text-zinc-900">
-                {formatCell(selectedRecord?.[field.key], field.format)}
+        <div className="space-y-6">
+          {groupDetailFields(config).map((section) => (
+            <section key={section.label} className="space-y-3">
+              <div className="border-b border-zinc-200 pb-2">
+                <h3 className="text-sm font-semibold text-zinc-950">{section.label}</h3>
               </div>
-            </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                {section.fields.map((field) => (
+                  <div key={field.key} className="rounded-md border border-zinc-200 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">
+                      {field.label}
+                    </p>
+                    <div className="mt-2 text-sm text-zinc-900">
+                      {formatCell(selectedRecord?.[field.key], field.format)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
           ))}
         </div>
       </Modal>
@@ -354,6 +408,8 @@ export function ModuleScreen({
         onClose={() => {
           setCreateOpen(false);
           setEditingRecord(null);
+          setFormError(null);
+          setFieldErrors({});
         }}
         size="xl"
         footer={
@@ -364,6 +420,8 @@ export function ModuleScreen({
               onClick={() => {
                 setCreateOpen(false);
                 setEditingRecord(null);
+                setFormError(null);
+                setFieldErrors({});
               }}
               className="h-9 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-60"
             >
@@ -380,15 +438,24 @@ export function ModuleScreen({
           </>
         }
       >
+        {formError ? (
+          <div className="mb-4 flex items-start gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+            <AlertCircle className="mt-0.5 size-4 shrink-0" />
+            <span>{formError}</span>
+          </div>
+        ) : null}
         <RecordForm
           key={`${config.key}-${editingRecord?.id ?? "new"}-${isCreateOpen ? "create" : "edit"}`}
           fields={config.fields}
           lookups={lookups}
           initialValue={editingRecord}
           submitting={submitting}
+          fieldErrors={fieldErrors}
           onCancel={() => {
             setCreateOpen(false);
             setEditingRecord(null);
+            setFormError(null);
+            setFieldErrors({});
           }}
           onSubmit={submitRecord}
         />
@@ -413,4 +480,39 @@ export function ModuleScreen({
       />
     </div>
   );
+}
+
+function extractFieldErrors(details: unknown) {
+  if (!details || typeof details !== "object" || !("fieldErrors" in details)) {
+    return {};
+  }
+
+  const fieldErrors = (details as { fieldErrors?: Record<string, string[]> }).fieldErrors;
+
+  if (!fieldErrors) {
+    return {};
+  }
+
+  return Object.fromEntries(
+    Object.entries(fieldErrors)
+      .filter(([, messages]) => messages?.[0])
+      .map(([field, messages]) => [field, messages[0]]),
+  );
+}
+
+function groupDetailFields(config: ModuleConfig) {
+  const sectionByField = new Map(config.fields.map((field) => [field.key, field.section]));
+  const sectionMap = new Map<
+    string,
+    Array<{ key: string; label: string; format?: ModuleConfig["detailFields"][number]["format"] }>
+  >();
+
+  config.detailFields.forEach((field) => {
+    const section = sectionByField.get(field.key) ?? "Thông tin";
+    const fields = sectionMap.get(section) ?? [];
+    fields.push(field);
+    sectionMap.set(section, fields);
+  });
+
+  return Array.from(sectionMap.entries()).map(([label, fields]) => ({ label, fields }));
 }

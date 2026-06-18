@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { ArrowDown, ArrowUp, Eye, Pencil, Trash2 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
 import type { ColumnConfig, ManagementRecord } from "./types";
@@ -15,6 +16,8 @@ type DataTableProps = {
   onView: (record: ManagementRecord) => void;
   onEdit: (record: ManagementRecord) => void;
   onDelete: (record: ManagementRecord) => void;
+  onCreate?: () => void;
+  emptyActionLabel?: string;
 };
 
 export function DataTable({
@@ -27,11 +30,18 @@ export function DataTable({
   onView,
   onEdit,
   onDelete,
+  onCreate,
+  emptyActionLabel,
 }: DataTableProps) {
+  const tableMinWidth = useMemo(() => getTableMinWidth(columns), [columns]);
+
   return (
     <div className="overflow-hidden border-y border-zinc-200 bg-white">
       <div className="overflow-x-auto">
-        <table className="min-w-[1180px] border-separate border-spacing-0 text-left text-sm">
+        <table
+          className="border-separate border-spacing-0 text-left text-sm"
+          style={{ minWidth: tableMinWidth }}
+        >
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
             <tr>
               {columns.map((column) => (
@@ -86,6 +96,15 @@ export function DataTable({
                   <p className="mt-1 text-sm text-zinc-500">
                     Thử đổi bộ lọc hoặc tạo bản ghi mới nếu bạn có quyền.
                   </p>
+                  {onCreate && emptyActionLabel ? (
+                    <button
+                      type="button"
+                      onClick={onCreate}
+                      className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800"
+                    >
+                      {emptyActionLabel}
+                    </button>
+                  ) : null}
                 </td>
               </tr>
             ) : (
@@ -160,4 +179,18 @@ export function formatCell(value: unknown, format: ColumnConfig["format"]) {
   }
 
   return <span className="line-clamp-2">{String(value)}</span>;
+}
+
+function getTableMinWidth(columns: ColumnConfig[]) {
+  const columnsWidth = columns.reduce((total, column) => total + parsePixelWidth(column.width), 0);
+
+  return Math.max(1180, columnsWidth + 132);
+}
+
+function parsePixelWidth(width?: string) {
+  if (!width?.endsWith("px")) {
+    return 160;
+  }
+
+  return Number(width.replace("px", "")) || 160;
 }

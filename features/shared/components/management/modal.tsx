@@ -1,6 +1,7 @@
 "use client";
 
 import { X } from "lucide-react";
+import { useEffect } from "react";
 import type { ReactNode } from "react";
 
 type ModalProps = {
@@ -28,13 +29,37 @@ export function Modal({
   footer,
   size = "lg",
 }: ModalProps) {
+  useEffect(() => {
+    if (!open) {
+      return undefined;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => document.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
   if (!open) {
     return null;
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4 py-6"
+      role="presentation"
+      onMouseDown={onClose}
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
+        onMouseDown={(event) => event.stopPropagation()}
         className={`flex max-h-[92vh] w-full ${sizeClass[size]} flex-col overflow-hidden rounded-lg bg-white shadow-xl`}
       >
         <div className="flex items-start justify-between border-b border-zinc-200 px-5 py-4">
@@ -63,4 +88,3 @@ export function Modal({
     </div>
   );
 }
-

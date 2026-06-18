@@ -1,5 +1,5 @@
-import { AdminApp } from "@/features/admin/components/admin-app";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <AdminApp />;
+  redirect("/crm/customers");
 }

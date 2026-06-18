@@ -42,25 +42,36 @@ const moduleIcons = {
   employees: Users,
 };
 
-export function AdminApp() {
+const modulePaths: Record<string, string> = {
+  customers: "/crm/customers",
+  services: "/crm/services",
+  contracts: "/crm/contracts",
+  departments: "/hr/departments",
+  "job-levels": "/hr/job-levels",
+  employees: "/hr/employees",
+};
+
+type AdminAppProps = {
+  activeModuleKey: string;
+};
+
+export function AdminApp({ activeModuleKey }: AdminAppProps) {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Đang tải hệ thống...</div>}>
-      <AdminAppInner />
+      <AdminAppInner activeModuleKey={activeModuleKey} />
     </Suspense>
   );
 }
 
-function AdminAppInner() {
+function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [lookups, setLookups] = useState<LookupCollections | null>(null);
   const [lookupsError, setLookupsError] = useState<string | null>(null);
 
   const activeModule = useMemo(() => {
-    const key = searchParams.get("module");
-
-    return allModules.find((module) => module.key === key) ?? defaultCrmModule;
-  }, [searchParams]);
+    return allModules.find((module) => module.key === activeModuleKey) ?? defaultCrmModule;
+  }, [activeModuleKey]);
 
   const fetchLookups = useCallback(async () => {
     try {
@@ -99,13 +110,13 @@ function AdminAppInner() {
 
   function changeModule(moduleKey: string) {
     const moduleConfig = allModules.find((module) => module.key === moduleKey) ?? defaultCrmModule;
+    const path = modulePaths[moduleConfig.key] ?? modulePaths[defaultCrmModule.key];
     const params = new URLSearchParams();
-    params.set("module", moduleConfig.key);
     params.set("page", "1");
     params.set("pageSize", searchParams.get("pageSize") ?? "10");
     params.set("sortBy", moduleConfig.defaultSortBy);
     params.set("sortOrder", "asc");
-    router.replace(`/?${params.toString()}`, { scroll: false });
+    router.replace(`${path}?${params.toString()}`, { scroll: false });
   }
 
   return (
