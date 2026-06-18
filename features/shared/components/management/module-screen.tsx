@@ -10,6 +10,7 @@ import type {
   ManagementRecord,
   ModuleConfig,
   Pagination as PaginationType,
+  RowActionConfig,
 } from "./types";
 import { ConfirmDialog } from "./confirm-dialog";
 import { DataTable, formatCell } from "./data-table";
@@ -39,6 +40,10 @@ export function ModuleScreen({
   const [editingRecord, setEditingRecord] = useState<ManagementRecord | null>(null);
   const [isCreateOpen, setCreateOpen] = useState(false);
   const [deletingRecord, setDeletingRecord] = useState<ManagementRecord | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    action: RowActionConfig;
+    record: ManagementRecord;
+  } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -198,6 +203,36 @@ export function ModuleScreen({
     }
   }
 
+  async function confirmRowAction() {
+    if (!pendingAction) {
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const response = await fetch(pendingAction.action.endpoint(pendingAction.record), {
+        method: pendingAction.action.method ?? "POST",
+      });
+      const payload = response.status === 204
+        ? null
+        : ((await response.json()) as ApiItemResponse<ManagementRecord>);
+
+      if (!response.ok || (payload && !payload.success)) {
+        throw new Error(payload?.error?.message ?? "Không thực hiện được thao tác");
+      }
+
+      setPendingAction(null);
+      await fetchRecords();
+      onRefreshLookups();
+    } catch (actionError) {
+      setError(actionError instanceof Error ? actionError.message : "Không thực hiện được thao tác");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   function handleSort(key: string) {
     setParams({
       sortBy: key,
@@ -236,14 +271,16 @@ export function ModuleScreen({
               <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
               Tải lại
             </button>
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800"
-            >
-              <Plus className="size-4" />
-              {config.primaryAction}
-            </button>
+            {config.canCreate === false ? null : (
+              <button
+                type="button"
+                onClick={openCreateModal}
+                className="inline-flex h-10 items-center gap-2 rounded-md bg-zinc-950 px-3 text-sm font-medium text-white hover:bg-zinc-800"
+              >
+                <Plus className="size-4" />
+                {config.primaryAction}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -306,27 +343,38 @@ export function ModuleScreen({
                       label: `${option.name}${option.code ? ` (${option.code})` : ""}`,
                       value: option.id,
                     })) ?? []
-                  : filter.options;
+                  : filter.options ?? [];
 
                 return (
                   <label key={filter.key}>
                     <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
                       {filter.label}
                     </span>
-                    <select
-                      value={searchParams.get(filter.key) ?? ""}
-                      onChange={(event) =>
-                        setParams({ [filter.key]: event.target.value || null, page: 1 })
-                      }
-                      className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
-                    >
-                      <option value="">{filter.placeholder ?? "Tất cả"}</option>
-                      {options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    {filter.type === "date" ? (
+                      <input
+                        type="date"
+                        value={searchParams.get(filter.key) ?? ""}
+                        onChange={(event) =>
+                          setParams({ [filter.key]: event.target.value || null, page: 1 })
+                        }
+                        className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                      />
+                    ) : (
+                      <select
+                        value={searchParams.get(filter.key) ?? ""}
+                        onChange={(event) =>
+                          setParams({ [filter.key]: event.target.value || null, page: 1 })
+                        }
+                        className="h-10 w-full rounded-md border border-zinc-300 bg-white px-3 text-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10"
+                      >
+                        <option value="">{filter.placeholder ?? "Tất cả"}</option>
+                        {options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </label>
                 );
               })}
@@ -360,8 +408,12 @@ export function ModuleScreen({
             onView={setSelectedRecord}
             onEdit={openEditModal}
             onDelete={setDeletingRecord}
-            onCreate={openCreateModal}
+            onRowAction={(action, record) => setPendingAction({ action, record })}
+            rowActions={config.rowActions}
+            onCreate={config.canCreate === false ? undefined : openCreateModal}
             emptyActionLabel={config.primaryAction}
+            canEdit={config.canEdit !== false}
+            canDelete={config.canDelete !== false}
           />
           <Pagination
             pagination={pagination}
@@ -464,19 +516,24 @@ export function ModuleScreen({
       <ConfirmDialog
         open={Boolean(deletingRecord)}
         title="Xóa dữ liệu"
-        description={`Bạn chắc chắn muốn xóa "${
-          deletingRecord?.companyName ??
-          deletingRecord?.name ??
-          deletingRecord?.fullName ??
-          deletingRecord?.employeeCode ??
-          deletingRecord?.code ??
-          deletingRecord?.contractCode ??
-          "bản ghi này"
-        }"? Dữ liệu sẽ được xóa mềm để còn lịch sử đối chiếu.`}
+        description={`Bạn chắc chắn muốn xóa "${getRecordLabel(deletingRecord)}"? Dữ liệu sẽ được xóa mềm để còn lịch sử đối chiếu.`}
         confirmLabel="Xóa"
         loading={submitting}
         onCancel={() => setDeletingRecord(null)}
         onConfirm={() => void confirmDelete()}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        title={pendingAction?.action.confirmTitle ?? pendingAction?.action.label ?? "Xác nhận thao tác"}
+        description={
+          pendingAction?.action.confirmDescription?.(pendingAction.record) ??
+          `Bạn chắc chắn muốn thực hiện "${pendingAction?.action.label}" cho "${getRecordLabel(pendingAction?.record)}"?`
+        }
+        confirmLabel={pendingAction?.action.confirmLabel ?? "Xác nhận"}
+        loading={submitting}
+        onCancel={() => setPendingAction(null)}
+        onConfirm={() => void confirmRowAction()}
       />
     </div>
   );
@@ -497,6 +554,24 @@ function extractFieldErrors(details: unknown) {
     Object.entries(fieldErrors)
       .filter(([, messages]) => messages?.[0])
       .map(([field, messages]) => [field, messages[0]]),
+  );
+}
+
+function getRecordLabel(record?: ManagementRecord | null) {
+  return String(
+    record?.companyName ??
+      record?.name ??
+      record?.fullName ??
+      record?.employeeCode ??
+      record?.customerName ??
+      record?.orderNo ??
+      record?.batchCode ??
+      record?.taskCode ??
+      record?.paymentNo ??
+      record?.settlementNo ??
+      record?.code ??
+      record?.contractCode ??
+      "bản ghi này",
   );
 }
 

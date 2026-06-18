@@ -4,15 +4,22 @@ import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Badge,
   Building2,
+  ClipboardCheck,
+  CreditCard,
   FileText,
+  Landmark,
+  Lock,
   Network,
   Package,
   PanelLeft,
+  Receipt,
   Users,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { crmModules, defaultModule as defaultCrmModule } from "@/features/crm/config";
+import { financeModules } from "@/features/finance/config";
 import { hrModules } from "@/features/hr/config";
+import { revenueModules } from "@/features/revenue/config";
 import type {
   ApiItemResponse,
   LookupCollections,
@@ -29,9 +36,17 @@ const moduleGroups = [
     label: "Nhân sự",
     modules: hrModules,
   },
+  {
+    label: "Doanh thu",
+    modules: revenueModules,
+  },
+  {
+    label: "Tài chính",
+    modules: financeModules,
+  },
 ];
 
-const allModules: ModuleConfig[] = [...crmModules, ...hrModules];
+const allModules: ModuleConfig[] = [...crmModules, ...hrModules, ...revenueModules, ...financeModules];
 
 const moduleIcons = {
   customers: Building2,
@@ -54,6 +69,15 @@ const moduleIcons = {
   "income-types": Package,
   "deduction-types": Package,
   "policy-overrides": Badge,
+  "recurring-batches": Receipt,
+  "one-time-tasks": ClipboardCheck,
+  orders: Receipt,
+  payments: CreditCard,
+  "debt-entries": Landmark,
+  "debt-summary": Landmark,
+  "debt-closings": Lock,
+  "partner-settlements": Network,
+  "partner-settlement-payments": CreditCard,
 };
 
 const modulePaths: Record<string, string> = {
@@ -77,6 +101,15 @@ const modulePaths: Record<string, string> = {
   "income-types": "/hr/income-types",
   "deduction-types": "/hr/deduction-types",
   "policy-overrides": "/hr/policy-overrides",
+  "recurring-batches": "/revenue/recurring-batches",
+  "one-time-tasks": "/revenue/one-time-tasks",
+  orders: "/revenue/orders",
+  payments: "/finance/payments",
+  "debt-entries": "/finance/debt-entries",
+  "debt-summary": "/finance/debt-summary",
+  "debt-closings": "/finance/debt-closings",
+  "partner-settlements": "/finance/partner-settlements",
+  "partner-settlement-payments": "/finance/partner-settlement-payments",
 };
 
 type AdminAppProps = {
@@ -103,14 +136,23 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
 
   const fetchLookups = useCallback(async () => {
     try {
-      const [crmResponse, hrResponse] = await Promise.all([
+      const [crmResponse, hrResponse, revenueResponse, financeResponse] = await Promise.all([
         fetch("/api/crm/lookups"),
         fetch("/api/hr/lookups"),
+        fetch("/api/revenue/lookups"),
+        fetch("/api/finance/lookups"),
       ]);
-      const [crmPayload, hrPayload] = (await Promise.all([
+      const [crmPayload, hrPayload, revenuePayload, financePayload] = (await Promise.all([
         crmResponse.json(),
         hrResponse.json(),
-      ])) as [ApiItemResponse<LookupCollections>, ApiItemResponse<LookupCollections>];
+        revenueResponse.json(),
+        financeResponse.json(),
+      ])) as [
+        ApiItemResponse<LookupCollections>,
+        ApiItemResponse<LookupCollections>,
+        ApiItemResponse<LookupCollections>,
+        ApiItemResponse<LookupCollections>,
+      ];
 
       if (!crmResponse.ok || !crmPayload.success) {
         throw new Error(crmPayload.error?.message ?? "Không tải được dữ liệu danh mục CRM");
@@ -119,10 +161,18 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
       if (!hrResponse.ok || !hrPayload.success) {
         throw new Error(hrPayload.error?.message ?? "Không tải được dữ liệu danh mục nhân sự");
       }
+      if (!revenueResponse.ok || !revenuePayload.success) {
+        throw new Error(revenuePayload.error?.message ?? "Không tải được dữ liệu danh mục doanh thu");
+      }
+      if (!financeResponse.ok || !financePayload.success) {
+        throw new Error(financePayload.error?.message ?? "Không tải được dữ liệu danh mục tài chính");
+      }
 
       setLookups({
         ...crmPayload.data,
         ...hrPayload.data,
+        ...revenuePayload.data,
+        ...financePayload.data,
       });
       setLookupsError(null);
     } catch (error) {

@@ -41,8 +41,8 @@ export type ColumnConfig = {
 export type FilterConfig = {
   key: string;
   label: string;
-  type: "select";
-  options: Array<{ label: string; value: string }>;
+  type: "select" | "date";
+  options?: Array<{ label: string; value: string }>;
   lookupKey?: string;
   placeholder?: string;
 };
@@ -63,6 +63,19 @@ export type MetricConfig = {
   getValue: (records: ManagementRecord[], pagination: Pagination | null) => ReactNode;
 };
 
+export type RowActionConfig = {
+  key: string;
+  label: string;
+  icon?: "send" | "check" | "lock" | "x" | "play" | "file" | "ban" | "dollar";
+  endpoint: (record: ManagementRecord) => string;
+  method?: "POST" | "PATCH";
+  variant?: "default" | "success" | "warning" | "danger";
+  confirmTitle?: string;
+  confirmLabel?: string;
+  confirmDescription?: (record: ManagementRecord) => string;
+  hidden?: (record: ManagementRecord) => boolean;
+};
+
 export type ModuleConfig<TKey extends string = string> = {
   key: TKey;
   title: string;
@@ -76,5 +89,8 @@ export type ModuleConfig<TKey extends string = string> = {
   fields: FieldConfig[];
   detailFields: Array<{ key: string; label: string; format?: ColumnConfig["format"] }>;
   metrics: MetricConfig[];
+  rowActions?: RowActionConfig[];
+  canCreate?: boolean;
+  canEdit?: boolean;
+  canDelete?: boolean;
 };
-

@@ -1,9 +1,23 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowDown, ArrowUp, Eye, Pencil, Trash2 } from "lucide-react";
+import {
+  ArrowDown,
+  ArrowUp,
+  Ban,
+  Check,
+  DollarSign,
+  Eye,
+  FileCheck,
+  Lock,
+  Pencil,
+  Play,
+  Send,
+  Trash2,
+  X,
+} from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/formatters";
-import type { ColumnConfig, ManagementRecord } from "./types";
+import type { ColumnConfig, ManagementRecord, RowActionConfig } from "./types";
 import { StatusBadge } from "./status-badge";
 
 type DataTableProps = {
@@ -16,8 +30,12 @@ type DataTableProps = {
   onView: (record: ManagementRecord) => void;
   onEdit: (record: ManagementRecord) => void;
   onDelete: (record: ManagementRecord) => void;
+  onRowAction?: (action: RowActionConfig, record: ManagementRecord) => void;
+  rowActions?: RowActionConfig[];
   onCreate?: () => void;
   emptyActionLabel?: string;
+  canEdit?: boolean;
+  canDelete?: boolean;
 };
 
 export function DataTable({
@@ -30,10 +48,14 @@ export function DataTable({
   onView,
   onEdit,
   onDelete,
+  onRowAction,
+  rowActions = [],
   onCreate,
   emptyActionLabel,
+  canEdit = true,
+  canDelete = true,
 }: DataTableProps) {
-  const tableMinWidth = useMemo(() => getTableMinWidth(columns), [columns]);
+  const tableMinWidth = useMemo(() => getTableMinWidth(columns, rowActions.length), [columns, rowActions.length]);
 
   return (
     <div className="overflow-hidden border-y border-zinc-200 bg-white">
@@ -70,7 +92,7 @@ export function DataTable({
                   )}
                 </th>
               ))}
-              <th className="sticky right-0 z-10 w-[132px] border-b border-l border-zinc-200 bg-zinc-50 px-4 py-3 text-right font-semibold">
+              <th className="sticky right-0 z-10 w-[220px] border-b border-l border-zinc-200 bg-zinc-50 px-4 py-3 text-right font-semibold">
                 Thao tác
               </th>
             </tr>
@@ -85,7 +107,7 @@ export function DataTable({
                     </td>
                   ))}
                   <td className="sticky right-0 z-10 border-b border-l border-zinc-100 bg-white px-4 py-3">
-                    <div className="ml-auto h-8 w-24 animate-pulse rounded bg-zinc-100" />
+                    <div className="ml-auto h-8 w-40 animate-pulse rounded bg-zinc-100" />
                   </td>
                 </tr>
               ))
@@ -129,22 +151,39 @@ export function DataTable({
                       >
                         <Eye className="size-4" />
                       </button>
-                      <button
-                        type="button"
-                        title="Sửa"
-                        onClick={() => onEdit(record)}
-                        className="inline-flex size-8 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50"
-                      >
-                        <Pencil className="size-4" />
-                      </button>
-                      <button
-                        type="button"
-                        title="Xóa"
-                        onClick={() => onDelete(record)}
-                        className="inline-flex size-8 items-center justify-center rounded-md text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 className="size-4" />
-                      </button>
+                      {rowActions
+                        .filter((action) => !action.hidden?.(record))
+                        .map((action) => (
+                          <button
+                            key={action.key}
+                            type="button"
+                            title={action.label}
+                            onClick={() => onRowAction?.(action, record)}
+                            className={`inline-flex size-8 items-center justify-center rounded-md ${getActionClass(action.variant)}`}
+                          >
+                            <ActionIcon icon={action.icon} />
+                          </button>
+                        ))}
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          title="Sửa"
+                          onClick={() => onEdit(record)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-blue-600 hover:bg-blue-50"
+                        >
+                          <Pencil className="size-4" />
+                        </button>
+                      ) : null}
+                      {canDelete ? (
+                        <button
+                          type="button"
+                          title="Xóa"
+                          onClick={() => onDelete(record)}
+                          className="inline-flex size-8 items-center justify-center rounded-md text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 className="size-4" />
+                        </button>
+                      ) : null}
                     </div>
                   </td>
                 </tr>
@@ -181,10 +220,11 @@ export function formatCell(value: unknown, format: ColumnConfig["format"]) {
   return <span className="line-clamp-2">{String(value)}</span>;
 }
 
-function getTableMinWidth(columns: ColumnConfig[]) {
+function getTableMinWidth(columns: ColumnConfig[], customActionCount: number) {
   const columnsWidth = columns.reduce((total, column) => total + parsePixelWidth(column.width), 0);
+  const actionWidth = Math.max(220, 132 + customActionCount * 36);
 
-  return Math.max(1180, columnsWidth + 132);
+  return Math.max(1180, columnsWidth + actionWidth);
 }
 
 function parsePixelWidth(width?: string) {
@@ -193,4 +233,35 @@ function parsePixelWidth(width?: string) {
   }
 
   return Number(width.replace("px", "")) || 160;
+}
+
+function ActionIcon({ icon }: { icon?: RowActionConfig["icon"] }) {
+  const className = "size-4";
+
+  if (icon === "send") return <Send className={className} />;
+  if (icon === "check") return <Check className={className} />;
+  if (icon === "lock") return <Lock className={className} />;
+  if (icon === "x") return <X className={className} />;
+  if (icon === "play") return <Play className={className} />;
+  if (icon === "file") return <FileCheck className={className} />;
+  if (icon === "ban") return <Ban className={className} />;
+  if (icon === "dollar") return <DollarSign className={className} />;
+
+  return <Play className={className} />;
+}
+
+function getActionClass(variant: RowActionConfig["variant"]) {
+  if (variant === "success") {
+    return "text-emerald-700 hover:bg-emerald-50";
+  }
+
+  if (variant === "warning") {
+    return "text-amber-700 hover:bg-amber-50";
+  }
+
+  if (variant === "danger") {
+    return "text-red-700 hover:bg-red-50";
+  }
+
+  return "text-zinc-700 hover:bg-zinc-100 hover:text-zinc-950";
 }
