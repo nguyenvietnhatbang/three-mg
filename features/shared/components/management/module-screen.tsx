@@ -24,6 +24,23 @@ type ModuleScreenProps = {
   onRefreshLookups: () => void;
 };
 
+type RecordCacheEntry = {
+  records: ManagementRecord[];
+  pagination: PaginationType | null;
+  updatedAt: number;
+};
+
+const recordCacheTtlMs = 2 * 60 * 1000;
+const recordCache = new Map<string, RecordCacheEntry>();
+
+function invalidateRecordCache(apiPath: string) {
+  Array.from(recordCache.keys()).forEach((key) => {
+    if (key.startsWith(`${apiPath}?`)) {
+      recordCache.delete(key);
+    }
+  });
+}
+
 export function ModuleScreen({
   config,
   lookups,
@@ -85,10 +102,7 @@ export function ModuleScreen({
     [pathname, router, searchParams],
   );
 
-  const fetchRecords = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-
+  const getRecordCacheKey = useCallback(() => {
     const params = new URLSearchParams();
     params.set("page", String(queryState.page));
     params.set("pageSize", String(queryState.pageSize));
@@ -103,6 +117,27 @@ export function ModuleScreen({
       }
     });
 
+    return {
+      cacheKey: `${config.apiPath}?${params.toString()}`,
+      params,
+    };
+  }, [config.apiPath, config.filters, queryState, searchParams]);
+
+  const fetchRecords = useCallback(async (options?: { force?: boolean }) => {
+    const { cacheKey, params } = getRecordCacheKey();
+    const cached = recordCache.get(cacheKey);
+
+    if (!options?.force && cached && Date.now() - cached.updatedAt < recordCacheTtlMs) {
+      setRecords(cached.records);
+      setPagination(cached.pagination);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
     try {
       const response = await fetch(`${config.apiPath}?${params.toString()}`);
       const payload = (await response.json()) as ApiListResponse<ManagementRecord>;
@@ -113,12 +148,17 @@ export function ModuleScreen({
 
       setRecords(payload.data);
       setPagination(payload.pagination);
+      recordCache.set(cacheKey, {
+        records: payload.data,
+        pagination: payload.pagination,
+        updatedAt: Date.now(),
+      });
     } catch (fetchError) {
       setError(fetchError instanceof Error ? fetchError.message : "Không tải được dữ liệu");
     } finally {
       setLoading(false);
     }
-  }, [config, queryState, searchParams]);
+  }, [config.apiPath, getRecordCacheKey]);
 
   useEffect(() => {
     // The table synchronizes with URL state and must refetch when it changes.
@@ -166,7 +206,8 @@ export function ModuleScreen({
 
       setCreateOpen(false);
       setEditingRecord(null);
-      await fetchRecords();
+      invalidateRecordCache(config.apiPath);
+      await fetchRecords({ force: true });
       onRefreshLookups();
     } catch (submitError) {
       setFormError(submitError instanceof Error ? submitError.message : "Không lưu được dữ liệu");
@@ -194,7 +235,8 @@ export function ModuleScreen({
       }
 
       setDeletingRecord(null);
-      await fetchRecords();
+      invalidateRecordCache(config.apiPath);
+      await fetchRecords({ force: true });
       onRefreshLookups();
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Không xóa được dữ liệu");
@@ -224,7 +266,8 @@ export function ModuleScreen({
       }
 
       setPendingAction(null);
-      await fetchRecords();
+      invalidateRecordCache(config.apiPath);
+      await fetchRecords({ force: true });
       onRefreshLookups();
     } catch (actionError) {
       setError(actionError instanceof Error ? actionError.message : "Không thực hiện được thao tác");
@@ -264,7 +307,7 @@ export function ModuleScreen({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => void fetchRecords()}
+              onClick={() => void fetchRecords({ force: true })}
               disabled={loading}
               className="inline-flex h-10 items-center gap-2 rounded-md border border-zinc-300 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50"
             >
@@ -390,7 +433,7 @@ export function ModuleScreen({
               </div>
               <button
                 type="button"
-                onClick={() => void fetchRecords()}
+                onClick={() => void fetchRecords({ force: true })}
                 className="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-white px-3 text-xs font-medium text-red-700 hover:bg-red-50"
               >
                 Thử lại

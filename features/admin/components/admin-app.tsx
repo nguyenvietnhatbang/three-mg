@@ -193,6 +193,10 @@ type VisibleNavigationItem = {
   modules: ModuleConfig[];
 };
 
+const clientCacheTtlMs = 5 * 60 * 1000;
+let authCache: { data: AuthSession; updatedAt: number } | null = null;
+let lookupsCache: { data: LookupCollections; updatedAt: number } | null = null;
+
 export function AdminApp({ activeModuleKey }: AdminAppProps) {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Đang tải hệ thống...</div>}>
@@ -262,6 +266,12 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   }, [activeModule, auth]);
 
   const fetchAuth = useCallback(async () => {
+    if (authCache && Date.now() - authCache.updatedAt < clientCacheTtlMs) {
+      setAuth(authCache.data);
+      setAuthLoading(false);
+      return;
+    }
+
     setAuthLoading(true);
     try {
       const response = await fetch("/api/auth/me");
@@ -272,13 +282,20 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
         return;
       }
 
+      authCache = { data: payload.data, updatedAt: Date.now() };
       setAuth(payload.data);
     } finally {
       setAuthLoading(false);
     }
   }, [router]);
 
-  const fetchLookups = useCallback(async () => {
+  const fetchLookups = useCallback(async (options?: { force?: boolean }) => {
+    if (!options?.force && lookupsCache && Date.now() - lookupsCache.updatedAt < clientCacheTtlMs) {
+      setLookups(lookupsCache.data);
+      setLookupsError(null);
+      return;
+    }
+
     try {
       const responses = await Promise.allSettled([
         fetchLookup("/api/crm/lookups"),
@@ -295,6 +312,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
         return merged;
       }, {});
 
+      lookupsCache = { data: mergedLookups, updatedAt: Date.now() };
       setLookups(mergedLookups);
       setLookupsError(null);
     } catch (error) {
@@ -331,6 +349,8 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
 
   async function logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+    authCache = null;
+    lookupsCache = null;
     router.replace("/login");
     router.refresh();
   }
@@ -456,7 +476,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
           key={effectiveActiveModule.key}
           config={effectiveActiveModule}
           lookups={lookups}
-          onRefreshLookups={() => void fetchLookups()}
+          onRefreshLookups={() => void fetchLookups({ force: true })}
         />
       </main>
     </div>
