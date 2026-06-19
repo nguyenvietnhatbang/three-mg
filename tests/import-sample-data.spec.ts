@@ -127,7 +127,7 @@ test("Import sample data step by step", async ({ page }) => {
   await page.locator('label:has-text("Email") input').fill("admin@gmail.com");
   await page.locator('label:has-text("Mật khẩu") input').fill("admin1234");
   await page.click('button:has-text("Đăng nhập")');
-  await page.waitForURL("/crm/customers");
+  await page.waitForURL("/crm");
   console.log("Logged in successfully!");
 
   console.log("=== STEP 2: Create Departments ===");

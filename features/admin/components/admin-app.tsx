@@ -18,7 +18,7 @@ import {
   Receipt,
   Users,
 } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import {
   canCreateModule,
   canDeleteModule,
@@ -140,47 +140,22 @@ const navigationGroups = [
   },
 ];
 
-const modulePaths: Record<string, string> = {
-  customers: "/crm/customers",
-  services: "/crm/services",
-  contracts: "/crm/contracts",
-  "contract-services": "/crm/contract-services",
-  "customer-contacts": "/crm/customer-contacts",
-  "customer-assignments": "/crm/customer-assignments",
-  "legal-entities": "/crm/legal-entities",
-  partners: "/crm/partners",
-  departments: "/hr/departments",
-  "job-levels": "/hr/job-levels",
-  employees: "/hr/employees",
-  "employee-dependents": "/hr/employee-dependents",
-  "payroll-settings": "/hr/payroll-settings",
-  "leave-types": "/hr/leave-types",
-  "leave-requests": "/hr/leave-requests",
-  "leave-balances": "/hr/leave-balances",
-  "company-holidays": "/hr/company-holidays",
-  "income-types": "/hr/income-types",
-  "deduction-types": "/hr/deduction-types",
-  "policy-overrides": "/hr/policy-overrides",
-  "recurring-batches": "/revenue/recurring-batches",
-  "one-time-tasks": "/revenue/one-time-tasks",
-  orders: "/revenue/orders",
-  payments: "/finance/payments",
-  "debt-entries": "/finance/debt-entries",
-  "debt-summary": "/finance/debt-summary",
-  "debt-closings": "/finance/debt-closings",
-  "partner-settlements": "/finance/partner-settlements",
-  "partner-settlement-payments": "/finance/partner-settlement-payments",
-  "payroll-periods": "/payroll/payroll-periods",
-  "payroll-inputs": "/payroll/payroll-inputs",
-  "payroll-lines": "/payroll/payroll-lines",
-  "payroll-policy-versions": "/payroll/payroll-policy-versions",
-  "tax-policy-versions": "/payroll/tax-policy-versions",
-  "tax-policy-brackets": "/payroll/tax-policy-brackets",
-  "insurance-policy-versions": "/payroll/insurance-policy-versions",
-  "commission-policies": "/payroll/commission-policies",
-  "allowance-policies": "/payroll/allowance-policies",
-  "kpi-snapshots": "/kpi/kpi-snapshots",
+const navigationGroupPaths: Record<string, string> = {
+  CRM: "/crm",
+  "Nhân sự": "/hr",
+  "Doanh thu": "/revenue",
+  "Tài chính": "/finance",
+  "Bảng lương": "/payroll",
+  KPI: "/kpi",
 };
+
+const moduleBasePaths = Object.fromEntries(
+  navigationGroups.flatMap((group) =>
+    group.items.flatMap((item) =>
+      item.moduleKeys.map((moduleKey) => [moduleKey, navigationGroupPaths[group.label] ?? "/crm"]),
+    ),
+  ),
+);
 
 type AdminAppProps = {
   activeModuleKey: string;
@@ -207,15 +182,15 @@ export function AdminApp({ activeModuleKey }: AdminAppProps) {
 
 function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [currentModuleKey, setCurrentModuleKey] = useState(activeModuleKey);
   const [auth, setAuth] = useState<AuthSession | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [lookups, setLookups] = useState<LookupCollections | null>(null);
   const [lookupsError, setLookupsError] = useState<string | null>(null);
 
   const activeModule = useMemo(() => {
-    return allModules.find((module) => module.key === activeModuleKey) ?? defaultCrmModule;
-  }, [activeModuleKey]);
+    return allModules.find((module) => module.key === currentModuleKey) ?? defaultCrmModule;
+  }, [currentModuleKey]);
 
   const visibleNavigationGroups = useMemo(() => {
     if (!auth) {
@@ -327,6 +302,12 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   }, [fetchAuth]);
 
   useEffect(() => {
+    // Route pages provide the initial module for direct links and refreshes.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setCurrentModuleKey(activeModuleKey);
+  }, [activeModuleKey]);
+
+  useEffect(() => {
     if (!auth) {
       return;
     }
@@ -338,13 +319,12 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
 
   function changeModule(moduleKey: string) {
     const moduleConfig = allModules.find((module) => module.key === moduleKey) ?? defaultCrmModule;
-    const path = modulePaths[moduleConfig.key] ?? modulePaths[defaultCrmModule.key];
-    const params = new URLSearchParams();
-    params.set("page", "1");
-    params.set("pageSize", searchParams.get("pageSize") ?? "10");
-    params.set("sortBy", moduleConfig.defaultSortBy);
-    params.set("sortOrder", "asc");
-    router.replace(`${path}?${params.toString()}`, { scroll: false });
+    setCurrentModuleKey(moduleConfig.key);
+
+    const path = moduleBasePaths[moduleConfig.key] ?? "/crm";
+    if (window.location.pathname !== path) {
+      window.history.replaceState(null, "", path);
+    }
   }
 
   async function logout() {

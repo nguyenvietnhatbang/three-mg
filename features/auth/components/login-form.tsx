@@ -16,7 +16,7 @@ export function LoginForm() {
 
   const nextUrl = useMemo(() => {
     const value = searchParams.get("next");
-    return value?.startsWith("/") ? value : "/crm/customers";
+    return value?.startsWith("/") ? value : "/crm";
   }, [searchParams]);
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {

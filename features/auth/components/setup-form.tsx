@@ -32,7 +32,7 @@ export function SetupForm() {
         return;
       }
 
-      router.replace("/crm/customers");
+      router.replace("/crm");
       router.refresh();
     } catch (setupError) {
       setError(setupError instanceof Error ? setupError.message : "Không setup được admin");

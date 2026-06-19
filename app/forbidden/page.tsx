@@ -18,7 +18,7 @@ export default function ForbiddenPage() {
           Tài khoản hiện tại chưa được cấp quyền cho module hoặc thao tác này.
         </p>
         <Link
-          href="/crm/customers"
+          href="/crm"
           className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-zinc-950 px-4 text-sm font-medium text-white hover:bg-zinc-800"
         >
           Về trang chính

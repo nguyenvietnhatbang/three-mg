@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AlertCircle, Plus, RefreshCw, RotateCcw, Search } from "lucide-react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type {
   ApiItemResponse,
   ApiListResponse,
@@ -30,6 +29,14 @@ type RecordCacheEntry = {
   updatedAt: number;
 };
 
+type QueryState = {
+  page: number;
+  pageSize: number;
+  search: string;
+  sortBy: string;
+  sortOrder: "asc" | "desc";
+};
+
 const recordCacheTtlMs = 2 * 60 * 1000;
 const recordCache = new Map<string, RecordCacheEntry>();
 
@@ -46,9 +53,6 @@ export function ModuleScreen({
   lookups,
   onRefreshLookups,
 }: ModuleScreenProps) {
-  const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const [records, setRecords] = useState<ManagementRecord[]>([]);
   const [pagination, setPagination] = useState<PaginationType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -64,42 +68,69 @@ export function ModuleScreen({
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [searchDraft, setSearchDraft] = useState(searchParams.get("search") ?? "");
-
-  const queryState = useMemo(
-    () => ({
-      page: Number(searchParams.get("page") ?? 1),
-      pageSize: Number(searchParams.get("pageSize") ?? 10),
-      search: searchParams.get("search") ?? "",
-      sortBy: searchParams.get("sortBy") ?? config.defaultSortBy,
-      sortOrder: (searchParams.get("sortOrder") === "desc" ? "desc" : "asc") as "asc" | "desc",
-    }),
-    [config.defaultSortBy, searchParams],
-  );
+  const [searchDraft, setSearchDraft] = useState("");
+  const [filterValues, setFilterValues] = useState<Record<string, string>>({});
+  const [queryState, setQueryState] = useState<QueryState>({
+    page: 1,
+    pageSize: 10,
+    search: "",
+    sortBy: config.defaultSortBy,
+    sortOrder: "asc",
+  });
 
   const activeFilterCount = useMemo(() => {
-    const filterCount = config.filters.filter((filter) => searchParams.get(filter.key)).length;
+    const filterCount = config.filters.filter((filter) => filterValues[filter.key]).length;
 
     return filterCount + (queryState.search ? 1 : 0);
-  }, [config.filters, queryState.search, searchParams]);
+  }, [config.filters, filterValues, queryState.search]);
 
   const setParams = useCallback(
     (updates: Record<string, string | number | null>) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.delete("module");
+      setQueryState((current) => {
+        const next = { ...current };
 
-      Object.entries(updates).forEach(([key, value]) => {
-        if (value === null || value === "") {
-          params.delete(key);
-        } else {
-          params.set(key, String(value));
+        if ("page" in updates) {
+          next.page = Number(updates.page ?? 1);
         }
+        if ("pageSize" in updates) {
+          next.pageSize = Number(updates.pageSize ?? 10);
+        }
+        if ("search" in updates) {
+          next.search = String(updates.search ?? "");
+        }
+        if ("sortBy" in updates) {
+          next.sortBy = String(updates.sortBy ?? config.defaultSortBy);
+        }
+        if ("sortOrder" in updates) {
+          next.sortOrder = updates.sortOrder === "desc" ? "desc" : "asc";
+        }
+
+        return next;
       });
 
-      const queryString = params.toString();
-      router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false });
+      setFilterValues((current) => {
+        const next = { ...current };
+        let changed = false;
+
+        config.filters.forEach((filter) => {
+          if (!(filter.key in updates)) {
+            return;
+          }
+
+          const value = updates[filter.key];
+          changed = true;
+
+          if (value === null || value === "") {
+            delete next[filter.key];
+          } else {
+            next[filter.key] = String(value);
+          }
+        });
+
+        return changed ? next : current;
+      });
     },
-    [pathname, router, searchParams],
+    [config.defaultSortBy, config.filters],
   );
 
   const getRecordCacheKey = useCallback(() => {
@@ -111,7 +142,7 @@ export function ModuleScreen({
     params.set("sortOrder", queryState.sortOrder);
 
     config.filters.forEach((filter) => {
-      const value = searchParams.get(filter.key);
+      const value = filterValues[filter.key];
       if (value) {
         params.set(filter.key, value);
       }
@@ -121,7 +152,7 @@ export function ModuleScreen({
       cacheKey: `${config.apiPath}?${params.toString()}`,
       params,
     };
-  }, [config.apiPath, config.filters, queryState, searchParams]);
+  }, [config.apiPath, config.filters, filterValues, queryState]);
 
   const fetchRecords = useCallback(async (options?: { force?: boolean }) => {
     const { cacheKey, params } = getRecordCacheKey();
@@ -165,12 +196,6 @@ export function ModuleScreen({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchRecords();
   }, [fetchRecords]);
-
-  useEffect(() => {
-    // Keep the debounced search input aligned with URL changes and module switches.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSearchDraft(searchParams.get("search") ?? "");
-  }, [config.key, searchParams]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -396,7 +421,7 @@ export function ModuleScreen({
                     {filter.type === "date" ? (
                       <input
                         type="date"
-                        value={searchParams.get(filter.key) ?? ""}
+                        value={filterValues[filter.key] ?? ""}
                         onChange={(event) =>
                           setParams({ [filter.key]: event.target.value || null, page: 1 })
                         }
@@ -404,7 +429,7 @@ export function ModuleScreen({
                       />
                     ) : (
                       <select
-                        value={searchParams.get(filter.key) ?? ""}
+                        value={filterValues[filter.key] ?? ""}
                         onChange={(event) =>
                           setParams({ [filter.key]: event.target.value || null, page: 1 })
                         }
