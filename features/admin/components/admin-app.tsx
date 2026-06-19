@@ -10,6 +10,7 @@ import {
   CreditCard,
   FileText,
   Landmark,
+  LogOut,
   Lock,
   Network,
   Package,
@@ -18,6 +19,13 @@ import {
   Users,
 } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import {
+  canCreateModule,
+  canDeleteModule,
+  canReadModule,
+  canUpdateModule,
+} from "@/features/auth/permissions";
+import type { AuthSession } from "@/features/auth/types";
 import { crmModules, defaultModule as defaultCrmModule } from "@/features/crm/config";
 import { analyticsModules } from "@/features/analytics/config";
 import { financeModules } from "@/features/finance/config";
@@ -159,6 +167,8 @@ export function AdminApp({ activeModuleKey }: AdminAppProps) {
 function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const [auth, setAuth] = useState<AuthSession | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
   const [lookups, setLookups] = useState<LookupCollections | null>(null);
   const [lookupsError, setLookupsError] = useState<string | null>(null);
 
@@ -166,53 +176,73 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
     return allModules.find((module) => module.key === activeModuleKey) ?? defaultCrmModule;
   }, [activeModuleKey]);
 
+  const visibleModuleGroups = useMemo(() => {
+    if (!auth) {
+      return [];
+    }
+
+    return moduleGroups
+      .map((group) => ({
+        ...group,
+        modules: group.modules.filter((module) => canReadModule(auth, module.key)),
+      }))
+      .filter((group) => group.modules.length > 0);
+  }, [auth]);
+
+  const effectiveActiveModule = useMemo<ModuleConfig>(() => {
+    if (!auth) {
+      return activeModule;
+    }
+
+    const canCreate = activeModule.canCreate !== false && canCreateModule(auth, activeModule.key);
+    const canEdit = activeModule.canEdit !== false && canUpdateModule(auth, activeModule.key);
+    const canDelete = activeModule.canDelete !== false && canDeleteModule(auth, activeModule.key);
+    const rowActions = canUpdateModule(auth, activeModule.key) ? activeModule.rowActions : [];
+
+    return {
+      ...activeModule,
+      rowActions,
+      canCreate,
+      canEdit,
+      canDelete,
+    };
+  }, [activeModule, auth]);
+
+  const fetchAuth = useCallback(async () => {
+    setAuthLoading(true);
+    try {
+      const response = await fetch("/api/auth/me");
+      const payload = (await response.json()) as ApiItemResponse<AuthSession>;
+
+      if (!response.ok || !payload.success) {
+        router.replace(`/login?next=${encodeURIComponent(window.location.pathname + window.location.search)}`);
+        return;
+      }
+
+      setAuth(payload.data);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, [router]);
+
   const fetchLookups = useCallback(async () => {
     try {
-      const [crmResponse, hrResponse, revenueResponse, financeResponse, payrollResponse] = await Promise.all([
-        fetch("/api/crm/lookups"),
-        fetch("/api/hr/lookups"),
-        fetch("/api/revenue/lookups"),
-        fetch("/api/finance/lookups"),
-        fetch("/api/payroll/lookups"),
+      const responses = await Promise.allSettled([
+        fetchLookup("/api/crm/lookups"),
+        fetchLookup("/api/hr/lookups"),
+        fetchLookup("/api/revenue/lookups"),
+        fetchLookup("/api/finance/lookups"),
+        fetchLookup("/api/payroll/lookups"),
       ]);
-      const [crmPayload, hrPayload, revenuePayload, financePayload, payrollPayload] = (await Promise.all([
-        crmResponse.json(),
-        hrResponse.json(),
-        revenueResponse.json(),
-        financeResponse.json(),
-        payrollResponse.json(),
-      ])) as [
-        ApiItemResponse<LookupCollections>,
-        ApiItemResponse<LookupCollections>,
-        ApiItemResponse<LookupCollections>,
-        ApiItemResponse<LookupCollections>,
-        ApiItemResponse<LookupCollections>,
-      ];
+      const mergedLookups = responses.reduce<LookupCollections>((merged, response) => {
+        if (response.status === "fulfilled") {
+          return { ...merged, ...response.value };
+        }
 
-      if (!crmResponse.ok || !crmPayload.success) {
-        throw new Error(crmPayload.error?.message ?? "Không tải được dữ liệu danh mục CRM");
-      }
+        return merged;
+      }, {});
 
-      if (!hrResponse.ok || !hrPayload.success) {
-        throw new Error(hrPayload.error?.message ?? "Không tải được dữ liệu danh mục nhân sự");
-      }
-      if (!revenueResponse.ok || !revenuePayload.success) {
-        throw new Error(revenuePayload.error?.message ?? "Không tải được dữ liệu danh mục doanh thu");
-      }
-      if (!financeResponse.ok || !financePayload.success) {
-        throw new Error(financePayload.error?.message ?? "Không tải được dữ liệu danh mục tài chính");
-      }
-      if (!payrollResponse.ok || !payrollPayload.success) {
-        throw new Error(payrollPayload.error?.message ?? "Không tải được dữ liệu danh mục bảng lương");
-      }
-
-      setLookups({
-        ...crmPayload.data,
-        ...hrPayload.data,
-        ...revenuePayload.data,
-        ...financePayload.data,
-        ...payrollPayload.data,
-      });
+      setLookups(mergedLookups);
       setLookupsError(null);
     } catch (error) {
       setLookupsError(error instanceof Error ? error.message : "Không tải được dữ liệu danh mục");
@@ -220,10 +250,20 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   }, []);
 
   useEffect(() => {
+    // Auth state is synchronized from the server-side session endpoint.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void fetchAuth();
+  }, [fetchAuth]);
+
+  useEffect(() => {
+    if (!auth) {
+      return;
+    }
+
     // Admin forms need lookup data for select fields.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchLookups();
-  }, [fetchLookups]);
+  }, [auth, fetchLookups]);
 
   function changeModule(moduleKey: string) {
     const moduleConfig = allModules.find((module) => module.key === moduleKey) ?? defaultCrmModule;
@@ -236,9 +276,23 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
     router.replace(`${path}?${params.toString()}`, { scroll: false });
   }
 
+  async function logout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    router.replace("/login");
+    router.refresh();
+  }
+
+  if (authLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-zinc-100 text-sm text-zinc-500">
+        Đang kiểm tra phiên đăng nhập...
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen bg-zinc-100 text-zinc-950">
-      <aside className="hidden w-72 shrink-0 border-r border-zinc-200 bg-white lg:flex lg:flex-col">
+      <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-zinc-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-zinc-200 px-5 py-4">
           <div className="flex items-center gap-3">
             <div className="flex size-10 items-center justify-center rounded-lg bg-zinc-950 text-white">
@@ -246,12 +300,12 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
             </div>
             <div>
               <p className="text-sm font-semibold text-zinc-950">3M Admin</p>
-              <p className="text-xs text-zinc-500">CRM & Nhân sự nền</p>
+              <p className="text-xs text-zinc-500">Production workspace</p>
             </div>
           </div>
         </div>
-        <nav className="space-y-5 p-3">
-          {moduleGroups.map((group) => (
+        <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
+          {visibleModuleGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 {group.label}
@@ -281,6 +335,20 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
             </div>
           ))}
         </nav>
+        <div className="mt-auto border-t border-zinc-200 px-5 py-3">
+          <p className="truncate text-sm font-medium text-zinc-900">{auth?.displayName}</p>
+          <p className="mt-0.5 truncate text-xs text-zinc-500">
+            {auth?.roles.join(", ") || "Chưa có vai trò"} · Scope {auth?.scope}
+          </p>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="mt-3 inline-flex h-8 items-center gap-2 rounded-md border border-zinc-300 px-2.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50"
+          >
+            <LogOut className="size-3.5" />
+            Đăng xuất
+          </button>
+        </div>
       </aside>
       <main className="flex min-w-0 flex-1 flex-col">
         <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:hidden">
@@ -290,7 +358,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
             onChange={(event) => changeModule(event.target.value)}
             className="h-9 rounded-md border border-zinc-300 bg-white px-2 text-sm"
           >
-            {moduleGroups.map((group) => (
+            {visibleModuleGroups.map((group) => (
               <optgroup key={group.label} label={group.label}>
                 {group.modules.map((module) => (
                   <option key={module.key} value={module.key}>
@@ -307,12 +375,27 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
           </div>
         ) : null}
         <ModuleScreen
-          key={activeModule.key}
-          config={activeModule}
+          key={effectiveActiveModule.key}
+          config={effectiveActiveModule}
           lookups={lookups}
           onRefreshLookups={() => void fetchLookups()}
         />
       </main>
     </div>
   );
+}
+
+async function fetchLookup(endpoint: string) {
+  const response = await fetch(endpoint);
+
+  if (response.status === 401 || response.status === 403) {
+    return {};
+  }
+
+  const payload = (await response.json()) as ApiItemResponse<LookupCollections>;
+  if (!response.ok || !payload.success) {
+    throw new Error(payload.error?.message ?? "Không tải được dữ liệu danh mục");
+  }
+
+  return payload.data;
 }

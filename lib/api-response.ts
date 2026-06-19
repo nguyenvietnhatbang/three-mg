@@ -38,6 +38,20 @@ export function notFound(message = "Không tìm thấy dữ liệu") {
   );
 }
 
+export function unauthorized(message = "Bạn cần đăng nhập để tiếp tục") {
+  return NextResponse.json(
+    { success: false, error: { message } },
+    { status: 401 },
+  );
+}
+
+export function forbidden(message = "Bạn không có quyền thực hiện thao tác này") {
+  return NextResponse.json(
+    { success: false, error: { message } },
+    { status: 403 },
+  );
+}
+
 export function serverError() {
   return NextResponse.json(
     { success: false, error: { message: "Có lỗi xảy ra, vui lòng thử lại" } },
@@ -52,9 +66,31 @@ export class BadRequestError extends Error {
   }
 }
 
+export class UnauthorizedError extends Error {
+  constructor(message = "Bạn cần đăng nhập để tiếp tục") {
+    super(message);
+    this.name = "UnauthorizedError";
+  }
+}
+
+export class ForbiddenError extends Error {
+  constructor(message = "Bạn không có quyền thực hiện thao tác này") {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
 export function handleApiError(error: unknown) {
   if (error instanceof BadRequestError) {
     return badRequest(error.message, error.details);
+  }
+
+  if (error instanceof UnauthorizedError) {
+    return unauthorized(error.message);
+  }
+
+  if (error instanceof ForbiddenError) {
+    return forbidden(error.message);
   }
 
   if (error instanceof ZodError) {
