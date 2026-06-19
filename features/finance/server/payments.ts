@@ -14,6 +14,27 @@ import { paymentInputSchema, paymentMethodSchema, paymentPatchSchema } from "./v
 
 const uuidSchema = z.string().uuid();
 
+function toISODate(dateVal: unknown): string {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const day = String(dateVal.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const s = String(dateVal);
+  if (s.includes("GMT") || /^[A-Za-z]/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return s.slice(0, 10);
+}
+
 const paymentSelectSql = `
   p.id,
   p.payment_no as "paymentNo",
@@ -151,7 +172,7 @@ export async function updatePayment(id: string, input: unknown) {
   const data = paymentInputSchema.parse({
     paymentNo: current.paymentNo,
     customerId: current.customerId,
-    paymentDate: String(current.paymentDate).slice(0, 10),
+    paymentDate: toISODate(current.paymentDate),
     method: current.method,
     amount: Number(current.amount),
     referenceNo: current.referenceNo,

@@ -12,6 +12,11 @@
 
 # testing
 /coverage
+/test-results
+
+# local scratch files
+/brain
+/test-issue-root.ts
 
 # next.js
 /.next/

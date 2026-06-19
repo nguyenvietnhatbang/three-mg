@@ -17,6 +17,27 @@ type OrderPatchData = z.infer<typeof orderPatchSchema>;
 
 const uuidSchema = z.string().uuid();
 
+function toISODate(dateVal: unknown): string {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const day = String(dateVal.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const s = String(dateVal);
+  if (s.includes("GMT") || /^[A-Za-z]/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return s.slice(0, 10);
+}
+
 const orderSelectSql = `
   o.id,
   o.order_no as "orderNo",
@@ -440,7 +461,7 @@ async function createOrderDebitEntry(client: PoolClient, orderId: string) {
     customerId: String(order.customerId),
     orderId,
     paymentId: null,
-    entryDate: String(order.documentDate).slice(0, 10),
+    entryDate: toISODate(order.documentDate),
     entryType: "order_debit",
     description: `Ghi nhận công nợ đơn hàng ${order.orderNo}`,
     debitAmount: Number(order.totalAmount ?? 0),
@@ -594,10 +615,10 @@ function currentToInput(current: Record<string, unknown>): OrderData {
     orderType: String(current.orderType) as OrderData["orderType"],
     status: String(current.status) as OrderData["status"],
     paymentStatus: String(current.paymentStatus) as OrderData["paymentStatus"],
-    documentDate: String(current.documentDate).slice(0, 10),
-    dueDate: current.dueDate ? String(current.dueDate).slice(0, 10) : null,
-    periodStart: current.periodStart ? String(current.periodStart).slice(0, 10) : null,
-    periodEnd: current.periodEnd ? String(current.periodEnd).slice(0, 10) : null,
+    documentDate: toISODate(current.documentDate),
+    dueDate: current.dueDate ? toISODate(current.dueDate) : null,
+    periodStart: current.periodStart ? toISODate(current.periodStart) : null,
+    periodEnd: current.periodEnd ? toISODate(current.periodEnd) : null,
     customerId: String(current.customerId),
     contractId: current.contractId ? String(current.contractId) : null,
     contractServiceId: current.contractServiceId ? String(current.contractServiceId) : null,

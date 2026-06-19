@@ -8,6 +8,27 @@ import { oneTimeTaskInputSchema, oneTimeTaskPatchSchema, taskStatusSchema } from
 
 const uuidFilterSchema = z.string().uuid();
 
+function toISODate(dateVal: unknown): string {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const day = String(dateVal.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const s = String(dateVal);
+  if (s.includes("GMT") || /^[A-Za-z]/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return s.slice(0, 10);
+}
+
 const baseTaskService = createManagementCrudService({
   tableName: "one_time_tasks",
   tableAlias: "ott",
@@ -118,7 +139,7 @@ export const oneTimeTaskService = {
       responsibleEmployeeId: current.responsibleEmployeeId,
       commissionEmployeeId: current.commissionEmployeeId,
       status: current.status,
-      taskDate: String(current.taskDate).slice(0, 10),
+      taskDate: toISODate(current.taskDate),
       description: current.description,
       quantity: Number(current.quantity ?? 1),
       unitPrice: Number(current.unitPrice ?? 0),

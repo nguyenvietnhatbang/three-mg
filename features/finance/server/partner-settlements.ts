@@ -15,6 +15,27 @@ import {
 
 const uuidFilterSchema = z.string().uuid();
 
+function toISODate(dateVal: unknown): string {
+  if (!dateVal) return "";
+  if (dateVal instanceof Date) {
+    const year = dateVal.getFullYear();
+    const month = String(dateVal.getMonth() + 1).padStart(2, "0");
+    const day = String(dateVal.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+  const s = String(dateVal);
+  if (s.includes("GMT") || /^[A-Za-z]/.test(s)) {
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) {
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    }
+  }
+  return s.slice(0, 10);
+}
+
 export const partnerSettlementService = createManagementCrudService({
   tableName: "partner_settlements",
   tableAlias: "ps",
@@ -167,7 +188,7 @@ export async function updatePartnerSettlementPayment(id: string, input: unknown)
 
   const data = partnerSettlementPaymentInputSchema.parse({
     partnerSettlementId: current.partnerSettlementId,
-    paymentDate: String(current.paymentDate).slice(0, 10),
+    paymentDate: toISODate(current.paymentDate),
     method: current.method,
     amount: Number(current.amount),
     referenceNo: current.referenceNo,
