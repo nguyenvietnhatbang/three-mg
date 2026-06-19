@@ -39,33 +39,6 @@ import type {
 } from "@/features/shared/components/management/types";
 import { ModuleScreen } from "@/features/shared/components/management/module-screen";
 
-const moduleGroups = [
-  {
-    label: "CRM",
-    modules: crmModules,
-  },
-  {
-    label: "Nhân sự",
-    modules: hrModules,
-  },
-  {
-    label: "Doanh thu",
-    modules: revenueModules,
-  },
-  {
-    label: "Tài chính",
-    modules: financeModules,
-  },
-  {
-    label: "Bảng lương",
-    modules: payrollModules,
-  },
-  {
-    label: "KPI",
-    modules: analyticsModules,
-  },
-];
-
 const allModules: ModuleConfig[] = [...crmModules, ...hrModules, ...revenueModules, ...financeModules, ...payrollModules, ...analyticsModules];
 
 const moduleIcons = {
@@ -109,6 +82,63 @@ const moduleIcons = {
   "allowance-policies": Package,
   "kpi-snapshots": ChartColumn,
 };
+
+const navigationGroups = [
+  {
+    label: "CRM",
+    items: [
+      { label: "Hồ sơ khách hàng", moduleKeys: ["customers", "customer-contacts", "customer-assignments"], iconKey: "customers" },
+      { label: "Hợp đồng & dịch vụ", moduleKeys: ["contracts", "contract-services", "services"], iconKey: "contracts" },
+      { label: "Thiết lập CRM", moduleKeys: ["legal-entities", "partners"], iconKey: "legal-entities" },
+    ],
+  },
+  {
+    label: "Nhân sự",
+    items: [
+      { label: "Nhân viên", moduleKeys: ["employees", "employee-dependents", "payroll-settings"], iconKey: "employees" },
+      { label: "Tổ chức", moduleKeys: ["departments", "job-levels"], iconKey: "departments" },
+      { label: "Nghỉ phép & lịch", moduleKeys: ["leave-requests", "leave-balances", "leave-types", "company-holidays"], iconKey: "leave-requests" },
+      { label: "Khoản lương HR", moduleKeys: ["income-types", "deduction-types", "policy-overrides"], iconKey: "income-types" },
+    ],
+  },
+  {
+    label: "Doanh thu",
+    items: [
+      { label: "Doanh thu", moduleKeys: ["orders", "one-time-tasks", "recurring-batches"], iconKey: "orders" },
+    ],
+  },
+  {
+    label: "Tài chính",
+    items: [
+      { label: "Thu tiền & công nợ", moduleKeys: ["payments", "debt-summary", "debt-entries", "debt-closings"], iconKey: "payments" },
+      { label: "Đối soát đối tác", moduleKeys: ["partner-settlements", "partner-settlement-payments"], iconKey: "partner-settlements" },
+    ],
+  },
+  {
+    label: "Bảng lương",
+    items: [
+      { label: "Chạy bảng lương", moduleKeys: ["payroll-periods", "payroll-inputs", "payroll-lines"], iconKey: "payroll-periods" },
+      {
+        label: "Chính sách lương",
+        moduleKeys: [
+          "payroll-policy-versions",
+          "tax-policy-versions",
+          "tax-policy-brackets",
+          "insurance-policy-versions",
+          "commission-policies",
+          "allowance-policies",
+        ],
+        iconKey: "payroll-policy-versions",
+      },
+    ],
+  },
+  {
+    label: "KPI",
+    items: [
+      { label: "KPI snapshots", moduleKeys: ["kpi-snapshots"], iconKey: "kpi-snapshots" },
+    ],
+  },
+];
 
 const modulePaths: Record<string, string> = {
   customers: "/crm/customers",
@@ -156,6 +186,13 @@ type AdminAppProps = {
   activeModuleKey: string;
 };
 
+type VisibleNavigationItem = {
+  id: string;
+  label: string;
+  iconKey: keyof typeof moduleIcons;
+  modules: ModuleConfig[];
+};
+
 export function AdminApp({ activeModuleKey }: AdminAppProps) {
   return (
     <Suspense fallback={<div className="p-6 text-sm text-zinc-500">Đang tải hệ thống...</div>}>
@@ -176,18 +213,34 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
     return allModules.find((module) => module.key === activeModuleKey) ?? defaultCrmModule;
   }, [activeModuleKey]);
 
-  const visibleModuleGroups = useMemo(() => {
+  const visibleNavigationGroups = useMemo(() => {
     if (!auth) {
       return [];
     }
 
-    return moduleGroups
+    return navigationGroups
       .map((group) => ({
         ...group,
-        modules: group.modules.filter((module) => canReadModule(auth, module.key)),
+        items: group.items
+          .map<VisibleNavigationItem>((item) => ({
+            id: item.moduleKeys.join(":"),
+            label: item.label,
+            iconKey: item.iconKey as keyof typeof moduleIcons,
+            modules: item.moduleKeys
+              .map((moduleKey) => allModules.find((module) => module.key === moduleKey))
+              .filter((module): module is ModuleConfig => module !== undefined)
+              .filter((module) => canReadModule(auth, module.key)),
+          }))
+          .filter((item) => item.modules.length > 0),
       }))
-      .filter((group) => group.modules.length > 0);
+      .filter((group) => group.items.length > 0);
   }, [auth]);
+
+  const activeNavigationItem = useMemo(() => {
+    return visibleNavigationGroups
+      .flatMap((group) => group.items)
+      .find((item) => item.modules.some((module) => module.key === activeModule.key));
+  }, [activeModule.key, visibleNavigationGroups]);
 
   const effectiveActiveModule = useMemo<ModuleConfig>(() => {
     if (!auth) {
@@ -305,21 +358,22 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
           </div>
         </div>
         <nav className="min-h-0 flex-1 space-y-5 overflow-y-auto p-3">
-          {visibleModuleGroups.map((group) => (
+          {visibleNavigationGroups.map((group) => (
             <div key={group.label}>
               <p className="px-3 pb-2 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                 {group.label}
               </p>
               <div className="space-y-1">
-                {group.modules.map((module) => {
-                  const Icon = moduleIcons[module.key as keyof typeof moduleIcons];
-                  const active = activeModule.key === module.key;
+                {group.items.map((item) => {
+                  const Icon = moduleIcons[item.iconKey];
+                  const active = item.modules.some((module) => module.key === activeModule.key);
+                  const targetModule = item.modules[0];
 
                   return (
                     <button
-                      key={module.key}
+                      key={item.id}
                       type="button"
-                      onClick={() => changeModule(module.key)}
+                      onClick={() => changeModule(targetModule.key)}
                       className={`flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm font-medium ${
                         active
                           ? "bg-zinc-950 text-white"
@@ -327,7 +381,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
                       }`}
                     >
                       <Icon className="size-4" />
-                      {module.title}
+                      {item.label}
                     </button>
                   );
                 })}
@@ -354,15 +408,15 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
         <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:hidden">
           <p className="text-sm font-semibold">3M Admin</p>
           <select
-            value={activeModule.key}
+            value={activeNavigationItem?.modules[0]?.key ?? activeModule.key}
             onChange={(event) => changeModule(event.target.value)}
             className="h-9 rounded-md border border-zinc-300 bg-white px-2 text-sm"
           >
-            {visibleModuleGroups.map((group) => (
+            {visibleNavigationGroups.map((group) => (
               <optgroup key={group.label} label={group.label}>
-                {group.modules.map((module) => (
-                  <option key={module.key} value={module.key}>
-                    {module.title}
+                {group.items.map((item) => (
+                  <option key={item.id} value={item.modules[0].key}>
+                    {item.label}
                   </option>
                 ))}
               </optgroup>
@@ -372,6 +426,30 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
         {lookupsError ? (
           <div className="border-b border-amber-200 bg-amber-50 px-5 py-2 text-sm text-amber-800">
             {lookupsError}
+          </div>
+        ) : null}
+        {activeNavigationItem && activeNavigationItem.modules.length > 1 ? (
+          <div className="border-b border-zinc-200 bg-white px-4 pt-3">
+            <div className="flex gap-1 overflow-x-auto">
+              {activeNavigationItem.modules.map((module) => {
+                const active = module.key === activeModule.key;
+
+                return (
+                  <button
+                    key={module.key}
+                    type="button"
+                    onClick={() => changeModule(module.key)}
+                    className={`whitespace-nowrap rounded-t-md border border-b-0 px-3 py-2 text-sm font-medium ${
+                      active
+                        ? "border-zinc-200 bg-zinc-100 text-zinc-950"
+                        : "border-transparent text-zinc-500 hover:bg-zinc-50 hover:text-zinc-900"
+                    }`}
+                  >
+                    {module.title}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         ) : null}
         <ModuleScreen
