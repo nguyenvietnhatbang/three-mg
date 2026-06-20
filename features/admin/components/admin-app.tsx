@@ -344,7 +344,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
   }
 
   return (
-    <div className="flex min-h-screen bg-zinc-100 text-zinc-950">
+    <div className="flex min-h-screen w-full overflow-x-hidden bg-zinc-100 text-zinc-950">
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 border-r border-zinc-200 bg-white lg:flex lg:flex-col">
         <div className="border-b border-zinc-200 px-5 py-4">
           <div className="flex items-center gap-3">
@@ -404,7 +404,7 @@ function AdminAppInner({ activeModuleKey }: AdminAppProps) {
           </button>
         </div>
       </aside>
-      <main className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col overflow-x-hidden">
         <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 lg:hidden">
           <p className="text-sm font-semibold">3M Admin</p>
           <select

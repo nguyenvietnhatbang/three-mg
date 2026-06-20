@@ -56,12 +56,13 @@ export function DataTable({
   canDelete = true,
 }: DataTableProps) {
   const tableMinWidth = useMemo(() => getTableMinWidth(columns, rowActions.length), [columns, rowActions.length]);
+  const actionWidth = useMemo(() => getActionColumnWidth(rowActions.length), [rowActions.length]);
 
   return (
-    <div className="overflow-hidden border-y border-zinc-200 bg-white">
-      <div className="overflow-x-auto">
+    <div className="min-w-0 max-w-full overflow-hidden border-y border-zinc-200 bg-white">
+      <div className="max-w-full overflow-x-auto overscroll-x-contain">
         <table
-          className="border-separate border-spacing-0 text-left text-sm"
+          className="w-max border-separate border-spacing-0 text-left text-sm"
           style={{ minWidth: tableMinWidth }}
         >
           <thead className="bg-zinc-50 text-xs uppercase tracking-wide text-zinc-500">
@@ -92,7 +93,10 @@ export function DataTable({
                   )}
                 </th>
               ))}
-              <th className="sticky right-0 z-10 w-[220px] border-b border-l border-zinc-200 bg-zinc-50 px-4 py-3 text-right font-semibold">
+              <th
+                style={{ width: actionWidth, minWidth: actionWidth }}
+                className="sticky right-0 z-20 border-b border-l border-zinc-200 bg-zinc-50 px-4 py-3 text-right font-semibold shadow-[-8px_0_12px_-12px_rgba(24,24,27,0.55)]"
+              >
                 Thao tác
               </th>
             </tr>
@@ -106,7 +110,10 @@ export function DataTable({
                       <div className="h-4 w-3/4 animate-pulse rounded bg-zinc-100" />
                     </td>
                   ))}
-                  <td className="sticky right-0 z-10 border-b border-l border-zinc-100 bg-white px-4 py-3">
+                  <td
+                    style={{ width: actionWidth, minWidth: actionWidth }}
+                    className="sticky right-0 z-10 border-b border-l border-zinc-100 bg-white px-4 py-3 shadow-[-8px_0_12px_-12px_rgba(24,24,27,0.35)]"
+                  >
                     <div className="ml-auto h-8 w-40 animate-pulse rounded bg-zinc-100" />
                   </td>
                 </tr>
@@ -141,7 +148,10 @@ export function DataTable({
                       {formatCell(record[column.key], column.format)}
                     </td>
                   ))}
-                  <td className="sticky right-0 z-10 border-b border-l border-zinc-100 bg-white px-3 py-2">
+                  <td
+                    style={{ width: actionWidth, minWidth: actionWidth }}
+                    className="sticky right-0 z-10 border-b border-l border-zinc-100 bg-white px-3 py-2 shadow-[-8px_0_12px_-12px_rgba(24,24,27,0.35)]"
+                  >
                     <div className="flex items-center justify-end gap-1">
                       <button
                         type="button"
@@ -222,9 +232,13 @@ export function formatCell(value: unknown, format: ColumnConfig["format"]) {
 
 function getTableMinWidth(columns: ColumnConfig[], customActionCount: number) {
   const columnsWidth = columns.reduce((total, column) => total + parsePixelWidth(column.width), 0);
-  const actionWidth = Math.max(220, 132 + customActionCount * 36);
+  const actionWidth = getActionColumnWidth(customActionCount);
 
   return Math.max(1180, columnsWidth + actionWidth);
+}
+
+function getActionColumnWidth(customActionCount: number) {
+  return Math.max(240, 148 + customActionCount * 40);
 }
 
 function parsePixelWidth(width?: string) {
