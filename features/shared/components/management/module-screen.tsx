@@ -322,7 +322,7 @@ export function ModuleScreen({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="border-b border-zinc-200 bg-white px-5 py-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -353,8 +353,8 @@ export function ModuleScreen({
         </div>
       </div>
 
-      <div className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden bg-zinc-50 p-5">
-        <div className="grid min-w-0 gap-3 md:grid-cols-3">
+      <div className="flex-1 overflow-y-auto bg-zinc-50 p-5">
+        <div className="grid gap-3 md:grid-cols-3">
           {config.metrics.map((metric) => (
             <div key={metric.label} className="rounded-lg border border-zinc-200 bg-white p-4">
               <p className="text-sm text-zinc-500">{metric.label}</p>
@@ -365,7 +365,7 @@ export function ModuleScreen({
           ))}
         </div>
 
-        <div className="mt-4 min-w-0 overflow-hidden rounded-lg border border-zinc-200 bg-white">
+        <div className="mt-4 rounded-lg border border-zinc-200 bg-white">
           <div className="space-y-3 p-4">
             <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div className="relative max-w-2xl flex-1">
